@@ -22,10 +22,11 @@ def get_ttl_hash(seconds: int) -> int:
 
 
 @lru_cache(maxsize=2)
-def get_cached_secret_binary(key_name: str) -> bytes:
+def get_cached_secret_binary(key_name: str, _ttl_hash: int | None = None) -> bytes:
     client: boto3.client = boto3.client('secretsmanager')
 
     return client.get_secret_value(SecretId=key_name)["SecretBinary"]
+
 
 @lru_cache(maxsize=2)
 def jwt_creator(_ttl_hash: int | None = None) -> str:
@@ -43,6 +44,8 @@ def jwt_creator(_ttl_hash: int | None = None) -> str:
     signing_key: jwt.AbstractJWKBase = jwt.jwk_from_pem(
         get_cached_secret_binary(
             key_name=PEM_CONTENTS_SECRET_NAME,
+            # Secrets can be deleted after 7 days so that is the max safe cache time
+            _ttl_hash=get_ttl_hash(60 * 60 * 24 * 7),
         )
     )
 
@@ -51,7 +54,7 @@ def jwt_creator(_ttl_hash: int | None = None) -> str:
 
 @lru_cache(maxsize=2)
 def installation_token_creator(_ttl_hash: int | None = None) -> str:
-    jwt_token: str = jwt_creator(get_ttl_hash(60 * 9))  # Lasts for 10 minutes
+    jwt_token: str = jwt_creator(get_ttl_hash(60 * 10))  # Lasts for 10 minutes
 
     github_url: str = f"https://api.github.com/app/installations/{INSTALLATION_ID}/access_tokens"
 
@@ -64,6 +67,7 @@ def installation_token_creator(_ttl_hash: int | None = None) -> str:
     response: requests.Response = requests.request(method="post", url=github_url, headers=headers)
     if response.status_code != 200:
         raise AuthorizationException("Failed retrieving installation token")
+
     return response.json()["token"]
 
 
