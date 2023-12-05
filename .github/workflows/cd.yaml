@@ -1,0 +1,42 @@
+---
+name: CI/CD
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+  push:
+    branches: [ main ]
+
+  workflow_dispatch:
+
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  AWS_DEFAULT_REGION: 'eu-west-1'
+  S3_BUCKET_NAME: aws-cognito-github-proxy-lambda-resources
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Zip lambda file
+      run: |-
+        zip proxy-lambda.zip proxy-lambda.py 
+
+    - name: Build deps layer zip file
+      run: |-
+        mkdir proxy-lambda-deps-layer
+        pip3.11 install -r requirements-deps-layer.txt -t proxy-lambda-deps-layer
+        zip proxy-lambda-deps-layer.zip -r proxy-lambda-deps-layer
+
+    - name: Copy to AWS S3
+      run: |-
+        aws s3 cp ./proxy-lambda.zip "s3://${S3_BUCKET_NAME}/aws-cognito-github-proxy/proxy-lambda.zip"
+        aws s3 cp ./proxy-lambda-deps-layer.zip "s3://${S3_BUCKET_NAME}/aws-cognito-github-proxy/proxy-lambda-deps-layer.zip"

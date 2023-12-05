@@ -1,0 +1,4 @@
+.venv/
+proxy-lambda-deps-layer/
+proxy-lambda-deps-layer.zip
+proxy-lambda.zip
