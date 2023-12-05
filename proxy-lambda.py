@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import boto3
 import jwt
 import os
 import time
@@ -6,10 +7,8 @@ import requests
 
 from functools import lru_cache
 
-AWS_SESSION_TOKEN: str = os.environ["AWS_SESSION_TOKEN"]
-PARAMETERS_SECRETS_EXTENSION_HTTP_PORT: str = os.environ.get("PARAMETERS_SECRETS_EXTENSION_HTTP_PORT", "2773")
-APP_ID_SECRET_NAME: str = os.environ["APP_ID_SECRET_NAME"]
-INSTALLATION_ID_SECRET_NAME: str = os.environ["INSTALLATION_ID_SECRET_NAME"]
+APP_ID: str = os.environ["APP_ID"]
+INSTALLATION_ID: str = os.environ["INSTALLATION_ID"]
 PEM_CONTENTS_SECRET_NAME: str = os.environ["PEM_CONTENTS_SECRET_NAME"]
 
 
@@ -22,24 +21,11 @@ def get_ttl_hash(seconds: int) -> int:
     return round(time.time() / seconds)
 
 
-@lru_cache(maxsize=20)
-def get_cached_secret_string(key_name: str, is_binary: bool = False) -> str:
-    value_key: str = "SecretBinary" if is_binary else "SecretString"
+@lru_cache(maxsize=2)
+def get_cached_secret_binary(key_name: str) -> bytes:
+    client: boto3.client = boto3.client('secretsmanager')
 
-    url: str = (
-        "https://localhost:"
-        + PARAMETERS_SECRETS_EXTENSION_HTTP_PORT
-        + "/secretsmanager/get?secretId="
-        + key_name
-    )
-
-    headers: dict[str, str] = {
-        "X-Aws-Parameters-Secrets-Token": AWS_SESSION_TOKEN,
-    }
-    response: requests.Response = requests.request(method="get", url=url, headers=headers)
-    if response.status_code != 200:
-        raise AuthorizationException("Failed retrieving secret from AWS Secrets Manager")
-    return response.json()[value_key]
+    return client.get_secret_value(SecretId=key_name)["SecretBinary"]
 
 @lru_cache(maxsize=2)
 def jwt_creator(_ttl_hash: int | None = None) -> str:
@@ -51,17 +37,14 @@ def jwt_creator(_ttl_hash: int | None = None) -> str:
         # JWT expiration time (10 minutes maximum)
         "exp": int(time.time()) + 600,
         # GitHub App identifier
-        "iss": get_cached_secret_string(APP_ID_SECRET_NAME)
+        "iss": APP_ID,
     }
 
-    pem_contents: bytes = (
-        get_cached_secret_string(
+    signing_key: jwt.AbstractJWKBase = jwt.jwk_from_pem(
+        get_cached_secret_binary(
             key_name=PEM_CONTENTS_SECRET_NAME,
-            is_binary=True,
-        ).encode(encoding="ascii")
+        )
     )
-
-    signing_key: jwt.AbstractJWKBase = jwt.jwk_from_pem(pem_contents)
 
     return jwt_instance.encode(payload, signing_key, alg="RS256")
 
@@ -69,9 +52,8 @@ def jwt_creator(_ttl_hash: int | None = None) -> str:
 @lru_cache(maxsize=2)
 def installation_token_creator(_ttl_hash: int | None = None) -> str:
     jwt_token: str = jwt_creator(get_ttl_hash(60 * 9))  # Lasts for 10 minutes
-    installation_id: str = get_cached_secret_string(INSTALLATION_ID_SECRET_NAME)
 
-    github_url: str = f"https://api.github.com/app/installations/{installation_id}/access_tokens"
+    github_url: str = f"https://api.github.com/app/installations/{INSTALLATION_ID}/access_tokens"
 
     headers: dict[str, str] = {
         "Accept": "application/vnd.github+json",

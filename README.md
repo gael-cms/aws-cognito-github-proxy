@@ -8,9 +8,18 @@ This is a cost-effective way of controlling API access to Github while managing 
 
 In order to deploy the solution in your own account, you can simply deploy the `cloudformation.yaml` template directly.
 
-This template references a public version of the Lambda function and dependency layer stored in S3.
+This template references a public version of the Lambda function and dependency layer stored in S3 in the `eu-west-1` region.
 
 If you would like to build and use your own S3 artifacts (and it is strongly recommended that you do so), see the section below.
+
+You will need to create a Github App, and provide an app ID and installation ID to be used as env variables.
+
+Once you generate a private key for your Github app you can upload it using:
+```shell
+aws secretsmanager create-secret \
+  --name YourSecretName \
+  --secret-binary "fileb:///path/to/your/secret.pem"
+```
 
 # Deploying your own Lambda artifacts to S3
 
