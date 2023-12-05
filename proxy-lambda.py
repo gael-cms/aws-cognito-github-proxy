@@ -7,8 +7,8 @@ import requests
 
 from functools import lru_cache
 
-APP_ID_SECRET_NAME: str = os.environ["APP_ID_SECRET_NAME"]
-INSTALLATION_ID_SECRET_NAME: str = os.environ["INSTALLATION_ID_SECRET_NAME"]
+APP_ID: str = os.environ["APP_ID"]
+INSTALLATION_ID: str = os.environ["INSTALLATION_ID"]
 PEM_CONTENTS_SECRET_NAME: str = os.environ["PEM_CONTENTS_SECRET_NAME"]
 
 
@@ -20,12 +20,6 @@ def get_ttl_hash(seconds: int) -> int:
     """Return the same value within `seconds` time period"""
     return round(time.time() / seconds)
 
-
-@lru_cache(maxsize=20)
-def get_cached_secret_string(key_name: str) -> str | bytes:
-    client: boto3.client = boto3.client('secretsmanager')
-
-    return client.get_secret_value(SecretId=key_name)["SecretString"]
 
 @lru_cache(maxsize=2)
 def get_cached_secret_binary(key_name: str) -> bytes:
@@ -43,7 +37,7 @@ def jwt_creator(_ttl_hash: int | None = None) -> str:
         # JWT expiration time (10 minutes maximum)
         "exp": int(time.time()) + 600,
         # GitHub App identifier
-        "iss": get_cached_secret_string(APP_ID_SECRET_NAME)
+        "iss": APP_ID,
     }
 
     signing_key: jwt.AbstractJWKBase = jwt.jwk_from_pem(
@@ -58,9 +52,8 @@ def jwt_creator(_ttl_hash: int | None = None) -> str:
 @lru_cache(maxsize=2)
 def installation_token_creator(_ttl_hash: int | None = None) -> str:
     jwt_token: str = jwt_creator(get_ttl_hash(60 * 9))  # Lasts for 10 minutes
-    installation_id: str = get_cached_secret_string(INSTALLATION_ID_SECRET_NAME)
 
-    github_url: str = f"https://api.github.com/app/installations/{installation_id}/access_tokens"
+    github_url: str = f"https://api.github.com/app/installations/{INSTALLATION_ID}/access_tokens"
 
     headers: dict[str, str] = {
         "Accept": "application/vnd.github+json",
