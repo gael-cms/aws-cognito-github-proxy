@@ -26,7 +26,13 @@ jobs:
 
     - name: Build deps layer zip file
       run: |-
-        pip3.11 install -r requirements-deps-layer.txt -t proxy-lambda-deps-layer/python
+        pip install \
+          --platform manylinux2014_aarch64 \
+          --target=proxy-lambda-deps-layer/python \
+          --implementation cp \
+          --python-version 3.11 \
+          --only-binary=:all: --upgrade \
+          --requirement=requirements-deps-layer.txt 
         cd proxy-lambda-deps-layer/
         zip ../proxy-lambda-deps-layer.zip -r python -x **/__pycache__/**/* -x **/__pycache__/
         cd ..
