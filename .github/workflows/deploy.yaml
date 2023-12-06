@@ -27,7 +27,10 @@ jobs:
     - name: Build deps layer zip file
       run: |-
         pip3.11 install -r requirements-deps-layer.txt -t proxy-lambda-deps-layer
-        zip proxy-lambda-deps-layer.zip -r proxy-lambda-deps-layer/*
+        rm -rf proxy-lambda-deps-layer/**/__pycache__/
+        cd proxy-lambda-deps-layer
+        zip ../proxy-lambda-deps-layer.zip -r *
+        cd ..
 
     - name: Copy to AWS S3
       run: |-
