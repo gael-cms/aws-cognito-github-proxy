@@ -1,5 +1,5 @@
 ---
-name: Deploy
+name: deploy
 
 on:
   workflow_dispatch:
@@ -27,6 +27,7 @@ jobs:
     - name: Build deps layer zip file
       run: |-
         pip3.11 install -r requirements-deps-layer.txt -t proxy-lambda-deps-layer/python/lib/python3.11/site-packages
+        cp -R proxy-lambda-deps-layer/python/lib/python3.11/site-packages/* proxy-lambda-deps-layer/python/
         zip proxy-lambda-deps-layer.zip -r proxy-lambda-deps-layer
 
     - name: Copy to AWS S3

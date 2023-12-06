@@ -38,25 +38,25 @@ aws secretsmanager create-secret \
 
 ## Creating python dependencies Layer artifact For AWS Lambda:
 
-1.  Create `proxy-lambda-deps-layer/`
-    ```shell
-    mkdir proxy-lambda-deps-layer
-    ```
-2. Install existing requirements:
+1. Install existing requirements:
     ```shell
     pip3.11 install -r requirements-deps-layer.txt -t proxy-lambda-deps-layer/python/lib/python3.11/site-packages
     ```
-3. (Optional) install any additional requirements and freeze using:
+2. (Optional) install any additional requirements and freeze using:
    ```shell
    pip3.11 install {dependency} -t proxy-lambda-deps-layer/python/lib/python3.11/site-packages
    pip3.11 freeze --path proxy-lambda-deps-layer/python/lib/python3.11/site-packages > requirements-deps-layer.txt      
    ```
-4. Create the `.zip` file of our requirements layer:
+3. Copy to both expected locations for AWS Lambda:
+   ```shell
+   cp -R proxy-lambda-deps-layer/python/lib/python3.11/site-packages/* proxy-lambda-deps-layer/python
+   ```
+3. Create the `.zip` file of our requirements layer:
     ```shell
     zip proxy-lambda-deps-layer.zip -r proxy-lambda-deps-layer 
     ```
-5. Upload the zip artifact to S3 so that it's available for use by your Lambda resource definition.
+4. Upload the zip artifact to S3 so that it's available for use by your Lambda resource definition.
     ```shell
     S3_BUCKET_NAME="aws-cognito-github-proxy-lambda-resources" && aws s3 cp ./proxy-lambda-deps-layer.zip "s3://${S3_BUCKET_NAME}/aws-cognito-github-proxy/proxy-lambda-deps-layer.zip"
     ```
-6. Update your Cloudformation deployment to reference your new S3 bucket and object keys for the Lambda dependency layer zipfile.
+5. Update your Cloudformation deployment to reference your new S3 bucket and object keys for the Lambda dependency layer zipfile.
