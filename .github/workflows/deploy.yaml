@@ -27,6 +27,7 @@ jobs:
     - name: Build deps layer zip file
       run: |-
         pip3.11 install -r requirements-deps-layer.txt -t proxy-lambda-deps-layer/python/lib/python3.11/site-packages
+        mkdir -p proxy-lambda-deps-layer/opt/python/lib/python3.11/site-packages
         cp -R proxy-lambda-deps-layer/python/lib/python3.11/site-packages/* proxy-lambda-deps-layer/python/
         cp -R proxy-lambda-deps-layer/python/lib/python3.11/site-packages/* proxy-lambda-deps-layer/opt/python/
         cp -R proxy-lambda-deps-layer/python/lib/python3.11/site-packages/* proxy-lambda-deps-layer/opt/python/lib/python3.11/site-packages
