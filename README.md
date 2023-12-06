@@ -38,7 +38,7 @@ aws secretsmanager create-secret \
 
 ## Creating python dependencies Layer artifact For AWS Lambda:
 
-1.  Create `python-deps-layer`
+1.  Create `proxy-lambda-deps-layer/`
     ```shell
     mkdir proxy-lambda-deps-layer
     ```
