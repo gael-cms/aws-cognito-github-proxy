@@ -38,18 +38,18 @@ aws secretsmanager create-secret \
 
 ## Creating python dependencies Layer artifact For AWS Lambda:
 
-1.  Create `python-deps-layer`
+1.  Create `proxy-lambda-deps-layer/`
     ```shell
     mkdir proxy-lambda-deps-layer
     ```
 2. Install existing requirements:
     ```shell
-    pip3.11 install -r requirements-deps-layer.txt -t proxy-lambda-deps-layer
+    pip3.11 install -r requirements-deps-layer.txt -t proxy-lambda-deps-layer/python/lib/python3.11/site-packages
     ```
 3. (Optional) install any additional requirements and freeze using:
    ```shell
-   pip3.11 install {dependency} -t proxy-lambda-deps-layer
-   pip3.11 freeze --path proxy-lambda-deps-layer > requirements-deps-layer.txt      
+   pip3.11 install {dependency} -t proxy-lambda-deps-layer/python/lib/python3.11/site-packages
+   pip3.11 freeze --path proxy-lambda-deps-layer/python/lib/python3.11/site-packages > requirements-deps-layer.txt      
    ```
 4. Create the `.zip` file of our requirements layer:
     ```shell
