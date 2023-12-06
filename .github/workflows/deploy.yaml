@@ -33,6 +33,7 @@ jobs:
           --python-version 3.11 \
           --only-binary=:all: --upgrade \
           --requirement=requirements-deps-layer.txt 
+        
         cd proxy-lambda-deps-layer/
         zip ../proxy-lambda-deps-layer.zip -r python -x **/__pycache__/**/* -x **/__pycache__/
         cd ..
