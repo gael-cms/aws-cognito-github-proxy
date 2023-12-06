@@ -31,7 +31,7 @@ jobs:
         cp -R proxy-lambda-deps-layer/python/lib/python3.11/site-packages/* proxy-lambda-deps-layer/python/
         cp -R proxy-lambda-deps-layer/python/lib/python3.11/site-packages/* proxy-lambda-deps-layer/opt/python/
         cp -R proxy-lambda-deps-layer/python/lib/python3.11/site-packages/* proxy-lambda-deps-layer/opt/python/lib/python3.11/site-packages
-        zip proxy-lambda-deps-layer.zip -r proxy-lambda-deps-layer
+        zip proxy-lambda-deps-layer.zip -r proxy-lambda-deps-layer/*
 
     - name: Copy to AWS S3
       run: |-
