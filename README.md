@@ -8,10 +8,6 @@ This is a cost-effective way of controlling API access to Github while managing 
 
 In order to deploy the solution in your own account, you can simply deploy the `cloudformation.yaml` template directly.
 
-This template references a public version of the Lambda function and dependency layer stored in S3 in the `eu-west-1` region.
-
-If you would like to build and use your own S3 artifacts (and it is strongly recommended that you do so), see the section below.
-
 You will need to create a Github App, and provide an app ID and installation ID to be used as env variables.
 
 Once you generate a private key for your Github app you can upload it using:
@@ -20,6 +16,18 @@ aws secretsmanager create-secret \
   --name YourSecretName \
   --secret-binary "fileb:///path/to/your/secret.pem"
 ```
+
+The configuration values for DecapCMS backend are available as outputs from the cloudformation template and are:
+- `OauthAppID`: `app_id` backend configuration field.
+- `OauthHostName`: `base_url` backend configuration field.
+- `GithubAPIProxyUrl`: `api_root` backend configuration field.
+
+An example AWS Certificate Manager Certificate is given in `certificate.yaml`. 
+You must deploy this in the `us-east-1` (this is a specific Cloudfront requirement).
+This is in a separate file to allow you to deploy all other resources in any region you choose. 
+
+The template references a public version of the Lambda function and dependency layer stored in S3 in the `eu-west-1` region.
+If you would like to build and use your own S3 artifacts (and it is strongly recommended that you do so), see the section below.
 
 # Deploying your own Lambda artifacts to S3
 
