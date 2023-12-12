@@ -1,0 +1,321 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: |
+  AWS Cognito Group, API Gateway and Lambda resources
+
+Parameters:
+  AdminEmail:
+    Type: String
+    Description: |-
+      'reply-to' email for AWS Cognito. 
+      Also creates a default user in Cognito pool for this email.
+  AWSLambdaS3BucketName:
+    Type: String
+    Description: The S3 bucket containing Lambda function + Layer. Default bucket is in 'eu-west-1'.
+    Default: aws-cognito-github-proxy-lambda-resources
+  CertificateArn:
+    Description: |-
+      ARN of AWS::CertificateManager::Certificate resource for use in Cloudfront. 
+      This certificate must be in the us-east-1 region.
+    Type: String
+  DomainName:
+    Type: String
+    Description: Your domain name. This adds login under cognito.your-domain.com
+  GithubAppID:
+    Type: String
+    Description: The Github App ID to use for authentication with Github
+  GithubInstallationID:
+    Type: String
+    Description: The specific installation ID of the application for your user / organization to use for authentication with Github.
+  GithubPrivateKeySecretArn:
+    Type: String
+    Description: ARN of the SecretManager secret containing your private PEM file contents (used for permissions).
+  GithubPrivateKeySecretName:
+    Type: String
+    Description: Name of the SecretManager secret containing your private PEM file contents (used for reading secret in lambda).
+  HostedZoneId:
+    Type: String
+    Description: The Route53 HostedZone we add the cognito.your-domain.com alias to.
+
+Resources:
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+      AutoVerifiedAttributes:
+        - email
+      EmailConfiguration:
+        ReplyToEmailAddress: !Ref AdminEmail
+      MfaConfiguration: 'OFF'
+      UserPoolName: !Ref DomainName
+      UserPoolTags:
+        website: !Ref DomainName
+      UsernameAttributes:
+        - email
+      UsernameConfiguration:
+        CaseSensitive: false
+      VerificationMessageTemplate:
+        DefaultEmailOption: CONFIRM_WITH_LINK
+
+  CognitoUserPoolUser1:
+    Type: AWS::Cognito::UserPoolUser
+    Properties:
+      Username: !Ref AdminEmail
+      DesiredDeliveryMediums:
+        - EMAIL
+      UserPoolId: !Ref CognitoUserPool
+
+  CognitoGithubResourceServer:
+    Type: AWS::Cognito::UserPoolResourceServer
+    Properties:
+      Identifier: https://api.github.com
+      Name: Github API
+      Scopes:
+        - ScopeName: repo
+          ScopeDescription: Repository scope for Github API
+      UserPoolId: !Ref CognitoUserPool
+
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    DependsOn: CognitoGithubResourceServer
+    Properties:
+      AccessTokenValidity: 10
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthScopes:
+        - https://api.github.com/repo
+        - openid
+        - email
+      AuthSessionValidity: 3 # minimum
+      CallbackURLs:
+        - !Sub 'https://${DomainName}/cms'
+#        - 'http://localhost:4000/cms' # Add localhost for testing
+      ClientName: DecapCMSAuthClient
+      DefaultRedirectURI: !Sub 'https://${DomainName}/cms'
+      EnableTokenRevocation: true
+      ExplicitAuthFlows:
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
+      GenerateSecret: false
+      IdTokenValidity: 10
+      PreventUserExistenceErrors: ENABLED
+      ReadAttributes: []
+      RefreshTokenValidity: 30
+      SupportedIdentityProviders:
+        - COGNITO
+      TokenValidityUnits:
+        AccessToken: hours
+        IdToken: hours
+        RefreshToken: days
+      UserPoolId: !Ref CognitoUserPool
+
+  CognitoUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      CustomDomainConfig:
+        CertificateArn: !Ref CertificateArn
+      Domain: !Sub 'cognito.${DomainName}'
+      UserPoolId: !Ref CognitoUserPool
+
+  Route53RecordSetGroup:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      RecordSets:
+        - Name: !Sub 'cognito.${DomainName}'
+          Type: A
+          AliasTarget:
+            DNSName: !GetAtt CognitoUserPoolDomain.CloudFrontDistribution
+            EvaluateTargetHealth: false
+            # The following HostedZoneId is always used for alias records pointing to CF.
+            HostedZoneId: Z2FDTNDATAQYW2
+
+  APIGatewayAPI:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      ApiKeySourceType: HEADER
+      Description: |-
+        Proxy of Github API to utilise AWS Cognito Auth instead of Github.
+      DisableExecuteApiEndpoint: false
+      EndpointConfiguration:
+        Types:
+          - EDGE
+      MinimumCompressionSize: 1024
+      Name: !Sub '${DomainName} Github Proxy'
+      Tags:
+        - Key: website
+          Value: !Ref DomainName
+
+  APIGatewayAuthorizer:
+    Type: AWS::ApiGateway::Authorizer
+    Properties:
+      IdentitySource: method.request.header.Authorization
+      Name: Cognito
+      ProviderARNs:
+        - !GetAtt CognitoUserPool.Arn
+      RestApiId: !Ref APIGatewayAPI
+      Type: COGNITO_USER_POOLS
+
+  APIGatewayResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt APIGatewayAPI.RootResourceId
+      PathPart: '{proxy+}'
+      RestApiId: !Ref APIGatewayAPI
+
+  ApiGatewayMethodANY:
+    Type: AWS::ApiGateway::Method
+    DependsOn: CognitoGithubResourceServer
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationScopes:
+        - 'https://api.github.com/repo'
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref APIGatewayAuthorizer
+      HttpMethod: ANY
+      Integration:
+        ConnectionType: 'INTERNET'
+        IntegrationHttpMethod: POST
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations
+      ResourceId: !Ref APIGatewayResource
+      RestApiId: !Ref APIGatewayAPI
+
+  ApiGatewayMethodOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        IntegrationResponses:
+          - ResponseParameters:
+              method.response.header.Access-Control-Allow-Credentials: '''true'''
+              method.response.header.Access-Control-Allow-Headers: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
+              method.response.header.Access-Control-Allow-Methods: '''DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'''
+              method.response.header.Access-Control-Allow-Origin: '''*'''
+            StatusCode: '200'
+        TimeoutInMillis: 29000
+        Type: MOCK
+      MethodResponses:
+        - ResponseModels:
+            application/json: 'Empty'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Credentials: integration.response.header.Access-Control-Allow-Credentials
+            method.response.header.Access-Control-Allow-Headers: integration.response.header.Access-Control-Allow-Headers
+            method.response.header.Access-Control-Allow-Methods: integration.response.header.Access-Control-Allow-Methods
+            method.response.header.Access-Control-Allow-Origin: integration.response.header.Access-Control-Allow-Origin
+          StatusCode: '200'
+      ResourceId: !Ref APIGatewayResource
+      RestApiId: !Ref APIGatewayAPI
+
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    Properties:
+      Description: Deployment of Github API proxy
+      RestApiId: !Ref APIGatewayAPI
+
+  ApiGatewayStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      DeploymentId: !Ref ApiGatewayDeployment
+      Description:  Production deployment stage for Github API proxy
+      RestApiId: !Ref APIGatewayAPI
+      Tags:
+        - Key: website
+          Value: !Ref DomainName
+      StageName: production
+
+  LambdaIAMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Description: IAM role for Lambda function execution
+      Policies:
+        - PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref GithubPrivateKeySecretArn
+          PolicyName: SecretsManagerGetSecretValuePermissions
+      RoleName: !Sub '${DomainName}GithubProxyLambdaRole'
+      Tags:
+        - Key: website
+          Value: !Ref DomainName
+
+  LambdaLayerVersion:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      CompatibleArchitectures:
+        - arm64
+      CompatibleRuntimes:
+        - python3.11
+      Content:
+        S3Bucket: !Ref AWSLambdaS3BucketName
+        S3Key: aws-cognito-github-proxy/proxy-lambda-deps-layer.zip
+        S3ObjectVersion: CcuFTKcdg1B0nEP389lQdTIYtPhSFYG4
+      Description: Python dependencies (requests and jwt libraries)
+      LayerName: !Sub '${AWS::StackName}-PythonDepsLayer'
+
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Architectures:
+        - arm64
+      Code:
+        S3Bucket: !Ref AWSLambdaS3BucketName
+        S3Key: aws-cognito-github-proxy/proxy-lambda.zip
+        S3ObjectVersion: _ytjncSNRcxRtKhBwmZHtVqGn.7ZK39m
+      Description: Lambda to proxy calls to Github API
+      Environment:
+        Variables:
+          APP_ID: !Ref GithubAppID
+          INSTALLATION_ID: !Ref GithubInstallationID
+          PEM_CONTENTS_SECRET_NAME: !Ref GithubPrivateKeySecretName
+      Handler: 'proxy-lambda.lambda_handler'
+      Layers:
+        - !Ref LambdaLayerVersion
+      PackageType: Zip
+      Role: !GetAtt LambdaIAMRole.Arn
+      Runtime: python3.11
+      Tags:
+        - Key: website
+          Value: !Ref DomainName
+      Timeout: 30
+
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceAccount: !Ref 'AWS::AccountId'
+
+Outputs:
+  OauthAppID:
+    Description: App ID to use as client ID for OAuth2 flows.
+    Value: !Ref CognitoUserPoolClient
+  OauthHostName:
+    Description: Host name to use to access Oauth2 flows
+    Value: !Sub 'https://${CognitoUserPoolDomain}'
+  GithubAPIProxyUrl:
+    Description: Proxy URL to point to instead of https://api.github.com
+    Value: !Sub 'https://${APIGatewayAPI}.execute-api.${AWS::Region}.amazonaws.com/${ApiGatewayStage}'

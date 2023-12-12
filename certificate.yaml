@@ -1,0 +1,32 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: |
+  Creates Certificate Manager certificate.
+  Must be deployed to us-east-1 for use with Cloudfront.
+
+Parameters:
+  DomainName:
+    Type: String
+    Description: Your domain name (example.com)
+  HostedZoneId:
+    Type: String
+    Default: Your Route53 hosted zone you want to add this to
+
+Resources:
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName:
+        Ref: !Sub 'cognito.${DomainName}'
+      DomainValidationOptions:
+        - DomainName: !Sub 'cognito.${DomainName}'
+          HostedZoneId: !Ref HostedZoneId
+      Tags:
+        - Key: website
+          Value: !Ref DomainName
+      ValidationMethod: DNS
+
+Outputs:
+  CertificateArn:
+    Description: Issued certificate
+    Value: !Ref Certificate
