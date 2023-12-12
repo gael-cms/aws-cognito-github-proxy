@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import boto3
+import json
 import jwt
 import os
 import time
@@ -95,15 +96,23 @@ def lambda_handler(event, _context) -> dict[str, object]:
     # Set the GitHub GraphQL API endpoint
     github_url = "https://api.github.com/" + pathParameters
 
-    response: requests.Response = requests.request(
-        method=httpMethod,
-        data=event["body"],
-        url=github_url,
-        headers=headers,
-    )
+    response: requests.Response
+    if event["body"]:
+        response = requests.request(
+            method=httpMethod,
+            json=json.loads(event["body"]),
+            url=github_url,
+            headers=headers,
+        )
+    else:
+        response = requests.request(
+            method=httpMethod,
+            url=github_url,
+            headers=headers,
+        )
 
     return {
         "statusCode": response.status_code,
         "body": response.text,
-        "headers": dict(response.headers),
+        # "headers": dict(response.headers),
     }
