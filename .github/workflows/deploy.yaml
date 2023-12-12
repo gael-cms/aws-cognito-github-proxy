@@ -1,5 +1,5 @@
 ---
-name: Deploy
+name: deploy
 
 on:
   workflow_dispatch:
@@ -26,8 +26,17 @@ jobs:
 
     - name: Build deps layer zip file
       run: |-
-        pip3.11 install -r requirements-deps-layer.txt -t proxy-lambda-deps-layer/python/lib/python3.11/site-packages
-        zip proxy-lambda-deps-layer.zip -r proxy-lambda-deps-layer
+        pip install \
+          --platform manylinux2014_aarch64 \
+          --target=proxy-lambda-deps-layer/python \
+          --implementation cp \
+          --python-version 3.11 \
+          --only-binary=:all: --upgrade \
+          --requirement=requirements-deps-layer.txt 
+        
+        cd proxy-lambda-deps-layer/
+        zip ../proxy-lambda-deps-layer.zip -r python -x **/__pycache__/**/* -x **/__pycache__/
+        cd ..
 
     - name: Copy to AWS S3
       run: |-

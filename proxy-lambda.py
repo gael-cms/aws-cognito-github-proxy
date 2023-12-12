@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import boto3
+import json
 import jwt
 import os
 import time
@@ -65,7 +66,7 @@ def installation_token_creator(_ttl_hash: int | None = None) -> str:
     }
 
     response: requests.Response = requests.request(method="post", url=github_url, headers=headers)
-    if response.status_code != 200:
+    if response.status_code != 201:
         raise AuthorizationException("Failed retrieving installation token")
 
     return response.json()["token"]
@@ -85,7 +86,7 @@ def lambda_handler(event, _context) -> dict[str, object]:
             "body": "Unexpected server error when generating authorization tokens"
         }
 
-    pathParameters: str = event["pathParameters"]["github"]
+    pathParameters: str = event["pathParameters"]["proxy"]
     httpMethod: str = event["httpMethod"]
     headers: dict[str, str] = {
         "Authorization": f"Bearer {token}",
@@ -95,15 +96,23 @@ def lambda_handler(event, _context) -> dict[str, object]:
     # Set the GitHub GraphQL API endpoint
     github_url = "https://api.github.com/" + pathParameters
 
-    response: requests.Response = requests.request(
-        method=httpMethod,
-        data=event["body"],
-        url=github_url,
-        headers=headers,
-    )
+    response: requests.Response
+    if event["body"]:
+        response = requests.request(
+            method=httpMethod,
+            json=json.loads(event["body"]),
+            url=github_url,
+            headers=headers,
+        )
+    else:
+        response = requests.request(
+            method=httpMethod,
+            url=github_url,
+            headers=headers,
+        )
 
     return {
         "statusCode": response.status_code,
         "body": response.text,
-        "headers": response.headers,
+        # "headers": dict(response.headers),
     }
