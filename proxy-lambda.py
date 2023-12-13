@@ -114,5 +114,9 @@ def lambda_handler(event, _context) -> dict[str, object]:
     return {
         "statusCode": response.status_code,
         "body": response.text,
+        "headers": {
+            "Access-Control-Allow-Origin": "*",
+        },
+        # Cannot pass headers opaquely due to issues around content negotiation
         # "headers": dict(response.headers),
     }

@@ -197,12 +197,15 @@ Resources:
       HttpMethod: OPTIONS
       Integration:
         IntegrationResponses:
-          - ResponseParameters:
+          - ContentHandling: CONVERT_TO_TEXT
+            ResponseParameters:
               method.response.header.Access-Control-Allow-Credentials: '''true'''
               method.response.header.Access-Control-Allow-Headers: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
               method.response.header.Access-Control-Allow-Methods: '''DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'''
               method.response.header.Access-Control-Allow-Origin: '''*'''
             StatusCode: '200'
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
         TimeoutInMillis: 29000
         Type: MOCK
       MethodResponses:
@@ -219,6 +222,9 @@ Resources:
 
   ApiGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ApiGatewayMethodANY
+      - ApiGatewayMethodOPTIONS
     Properties:
       Description: Deployment of Github API proxy
       RestApiId: !Ref APIGatewayAPI
